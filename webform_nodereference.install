@@ -1,0 +1,67 @@
+<?php
+
+/**
+ * @file
+ * Define schema for webform_nodereference module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function webform_nodereference_schema() {
+  return array(
+    'webform_nodereference' => array(
+      'description' => 'Store webform submission node references.',
+      'fields' => array(
+        'nid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'cid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'sid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'rnid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+      ),
+      'indexes' => array(
+        'nid' => array('nid'),
+        'sid_nid' => array('sid', 'nid'),
+      ),
+      'primary key' => array('nid', 'sid', 'cid', 'rnid'),
+    ),
+    'cache_webform_nodereference' => drupal_get_schema_unprocessed('system', 'cache'),
+  );
+}
+
+/**
+ * Implements hook_install().
+ */
+function webform_nodereference_install() {
+  drupal_install_schema('webform_nodereference');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function webform_nodereference_uninstall() {
+  drupal_uninstall_schema('webform_nodereference');
+}

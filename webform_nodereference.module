@@ -1,0 +1,140 @@
+<?php
+
+/**
+ * @file
+ * Provides a webform nodereference component.
+ */
+
+/**
+ * Implements hook_nodeapi().
+ */
+function webform_nodereference_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
+  switch ($op) {
+    case 'load':
+      webform_nodereference_node_load($node);
+      break;
+    case 'view':
+      webform_nodereference_node_view($node);
+      break;
+  }
+}
+
+/**
+ * Implements hook_node_load().
+ */
+function webform_nodereference_node_load(&$node) {
+  $cache = cache_get('webform_nodereference:tally:' . $node->nid, 'cache_webform_nodereference');
+  
+  if ( !$cache ) {
+    $tally = array();
+    
+    $result = db_query("SELECT * FROM {webform_component} WHERE type = 'nodereference'");
+    while ( $component = db_fetch_object($result) ) {
+      $components[] = $component;
+    }
+    
+    foreach ( $components as $component ) {
+      $result = db_result(db_query("SELECT COUNT(*) FROM {webform_nodereference} WHERE nid = %d AND cid = %d AND rnid = %d", $component->nid, $component->cid, $node->nid));
+      if ( $result > 0 ) {
+        $tally[$component->nid][$component->cid] = $result;
+      }
+    }
+    
+    cache_set('webform_nodereference:tally:' . $node->nid, $tally, 'cache_webform_nodereference');
+  }
+  else {
+    $tally = $cache->data;
+  }
+  
+  $node->webform_nodereference = $tally;
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function webform_nodereference_node_view(&$node) {
+  if ( isset($node->webform_nodereference) && !empty($node->webform_nodereference) ) {
+    foreach ( $node->webform_nodereference as $nid => $component ) {
+      foreach ( $component as $cid => $tally ) {
+        $items[] = $nid . "->" . $cid . "->" . $tally;
+      }
+    }
+  }
+  
+  $node->content['webform_nodereference'] = array(
+    '#value' => theme('item_list', $items),
+    '#weight' => -100,
+  );
+}
+
+/**
+ * Implements hook_webform_component_info().
+ */
+function webform_nodereference_webform_component_info() {
+  return array(
+    'nodereference' => array(
+      'label' => t('Node Reference'),
+      'description' => t('Reference a node.'),
+      'features' => array(
+        'csv' => TRUE,
+        'email' => FALSE,
+        'email_address' => FALSE,
+        'email_name' => FALSE,
+        'required' => FALSE,
+        'conditional' => FALSE,
+        'group' => FALSE,
+        'attachment' => FALSE,
+      ),
+      'file' => 'webform_nodereference.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_webform_submission_insert().
+ */
+function webform_nodereference_webform_submission_insert($node, $submission) {
+  if ( !empty($node->webform['components']) ) {
+    foreach ( $node->webform['components'] as $component ) {
+      if ( $component['type'] == 'nodereference' ) {
+        db_query("INSERT INTO {webform_nodereference} (nid, cid, sid, rnid) VALUES (%d, %d, %d, %d)", $component['nid'], $component['cid'], $submission->sid, $submission->data[$component['cid']]['value'][0]);
+        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_webform_submission_update().
+ */
+function webform_nodereference_webform_submission_update($node, $submission) {
+  if ( !empty($node->webform['components']) ) {
+    foreach ( $node->webform['components'] as $component ) {
+      if ( $component['type'] == 'nodereference' ) {
+        db_query("UPDATE {webform_nodereference} SET rnid = %d WHERE sid = %d", $submission->data[$component['cid']]['value'][0], $submission->sid);
+        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_webform_submission_delete().
+ */
+function webform_nodereference_webform_submission_delete($node, $submission) {
+  if ( !empty($node->webform['components']) ) {
+    foreach ( $node->webform['components'] as $component ) {
+      if ( $component['type'] == 'nodereference' ) {
+        db_query("DELETE FROM {webform_nodereference} WHERE sid = %d LIMIT 1", $submission->sid);
+        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function webform_nodereference_flush_caches() {
+  return array('cache_webform_nodereference');
+}
