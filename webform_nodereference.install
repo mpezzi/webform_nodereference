@@ -48,7 +48,39 @@ function webform_nodereference_schema() {
       ),
       'primary key' => array('nid', 'sid', 'cid', 'rnid'),
     ),
-    'cache_webform_nodereference' => drupal_get_schema_unprocessed('system', 'cache'),
+    'webform_nodereference_count' => array(
+      'fields' => array(
+        'nid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'wnid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'cid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+        'total' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'unsigned' => TRUE,
+          'default' => 0,
+          'description' => '',
+        ),
+      ),
+      'primary key' => array('nid', 'wnid', 'cid'),
+    ),
   );
 }
 

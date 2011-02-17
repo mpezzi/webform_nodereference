@@ -6,6 +6,22 @@
  */
 
 /**
+ * Implements hook_menu().
+ */
+function webform_nodereference_menu() {
+  return array(
+    'admin/settings/webform_nodereference' => array(
+      'title' => 'Webform Node Reference',
+      'description' => t('Change settings for webform node reference.'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('webform_nodereference_admin_settings_form'),
+      'access arguments' => array('administer nodes'),
+      'file' => 'webform_nodereference.admin.inc',
+    ),
+  );
+}
+
+/**
  * Implements hook_nodeapi().
  */
 function webform_nodereference_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
@@ -23,48 +39,32 @@ function webform_nodereference_nodeapi(&$node, $op, $teaser = NULL, $page = NULL
  * Implements hook_node_load().
  */
 function webform_nodereference_node_load(&$node) {
-  $cache = cache_get('webform_nodereference:tally:' . $node->nid, 'cache_webform_nodereference');
-  
-  if ( !$cache ) {
-    $tally = array();
-    
-    $result = db_query("SELECT * FROM {webform_component} WHERE type = 'nodereference'");
-    while ( $component = db_fetch_object($result) ) {
-      $components[] = $component;
-    }
-    
-    foreach ( $components as $component ) {
-      $result = db_result(db_query("SELECT COUNT(*) FROM {webform_nodereference} WHERE nid = %d AND cid = %d AND rnid = %d", $component->nid, $component->cid, $node->nid));
-      if ( $result > 0 ) {
-        $tally[$component->nid][$component->cid] = $result;
-      }
-    }
-    
-    cache_set('webform_nodereference:tally:' . $node->nid, $tally, 'cache_webform_nodereference');
+  $result = db_query("SELECT * FROM {webform_nodereference_count} WHERE nid = %d", $node->nid);
+  while ( $ref = db_fetch_object($result) ) {
+    $node->webform_nodereference[$ref->wnid][$ref->cid] = $ref->total;
   }
-  else {
-    $tally = $cache->data;
-  }
-  
-  $node->webform_nodereference = $tally;
 }
 
 /**
  * Implements hook_node_view().
  */
 function webform_nodereference_node_view(&$node) {
+  $items = array();
+  
   if ( isset($node->webform_nodereference) && !empty($node->webform_nodereference) ) {
-    foreach ( $node->webform_nodereference as $nid => $component ) {
-      foreach ( $component as $cid => $tally ) {
-        $items[] = $nid . "->" . $cid . "->" . $tally;
+    foreach ( $node->webform_nodereference as $nid => $ref ) {
+      foreach ( $ref as $cid => $total ) {
+        $items[] = $nid .'->'. $cid .'->'. $total;
       }
     }
   }
   
-  $node->content['webform_nodereference'] = array(
-    '#value' => theme('item_list', $items),
-    '#weight' => -100,
-  );
+  if ( count($items) ) {
+    $node->content['webform_nodereference'] = array(
+      '#value' => theme('item_list', $items),
+      '#weight' => -100,
+    );
+  }
 }
 
 /**
@@ -97,8 +97,18 @@ function webform_nodereference_webform_submission_insert($node, $submission) {
   if ( !empty($node->webform['components']) ) {
     foreach ( $node->webform['components'] as $component ) {
       if ( $component['type'] == 'nodereference' ) {
-        db_query("INSERT INTO {webform_nodereference} (nid, cid, sid, rnid) VALUES (%d, %d, %d, %d)", $component['nid'], $component['cid'], $submission->sid, $submission->data[$component['cid']]['value'][0]);
-        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+        $rnid = $submission->data[$component['cid']]['value'][0];
+        
+        // Insert a new reference record.
+        db_query("INSERT INTO {webform_nodereference} (nid, cid, sid, rnid) VALUES (%d, %d, %d, %d)", $component['nid'], $component['cid'], $submission->sid, $rnid);
+        
+        // Create or increase current count.
+        if ( db_result(db_query("SELECT COUNT(*) FROM {webform_nodereference_count} WHERE nid = %d AND wnid = %d AND cid = %d", $rnid, $component['nid'], $component['cid'])) ) {
+          db_query("UPDATE {webform_nodereference_count} SET total = ( total + 1 ) WHERE nid = %d AND wnid = %d AND cid = %d", $rnid, $component['nid'], $component['cid']);
+        }
+        else {
+          db_query("INSERT INTO {webform_nodereference_count} (nid, wnid, cid, total) VALUES (%d, %d, %d, %d)", $rnid, $component['nid'], $component['cid'], 1);
+        }
       }
     }
   }
@@ -111,8 +121,26 @@ function webform_nodereference_webform_submission_update($node, $submission) {
   if ( !empty($node->webform['components']) ) {
     foreach ( $node->webform['components'] as $component ) {
       if ( $component['type'] == 'nodereference' ) {
-        db_query("UPDATE {webform_nodereference} SET rnid = %d WHERE sid = %d", $submission->data[$component['cid']]['value'][0], $submission->sid);
-        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+        $rnid = $submission->data[$component['cid']]['value'][0];
+        
+        // See if we need to change the reference count.
+        $reference = db_fetch_object(db_query("SELECT * FROM {webform_nodereference} WHERE sid = %d", $submission->sid));
+        if ( isset($reference->rnid) && $reference->rnid != $rnid ) {
+          
+          // Decrease old value.
+          db_query("UPDATE {webform_nodereference_count} SET total = ( total - 1 ) WHERE nid = %d AND wnid = %d AND cid = %d", $reference->rnid, $component['nid'], $component['cid']);
+          
+          // Create or increase current count.
+          if ( db_result(db_query("SELECT COUNT(*) FROM {webform_nodereference_count} WHERE nid = %d AND wnid = %d AND cid = %d", $rnid, $component['nid'], $component['cid'])) ) {
+            db_query("UPDATE {webform_nodereference_count} SET total = ( total + 1 ) WHERE nid = %d AND wnid = %d AND cid = %d", $rnid, $component['nid'], $component['cid']);
+          }
+          else {
+            db_query("INSERT INTO {webform_nodereference_count} (nid, wnid, cid, total) VALUES (%d, %d, %d, %d)", $rnid, $component['nid'], $component['cid'], 1);
+          }
+        }
+        
+        // Update reference record.
+        db_query("UPDATE {webform_nodereference} SET rnid = %d WHERE sid = %d", $rnid, $submission->sid);
       }
     }
   }
@@ -125,16 +153,14 @@ function webform_nodereference_webform_submission_delete($node, $submission) {
   if ( !empty($node->webform['components']) ) {
     foreach ( $node->webform['components'] as $component ) {
       if ( $component['type'] == 'nodereference' ) {
+        $rnid = $submission->data[$component['cid']]['value'][0];
+        
+        // Remove reference record.
         db_query("DELETE FROM {webform_nodereference} WHERE sid = %d LIMIT 1", $submission->sid);
-        cache_clear_all('webform_nodereference:tally:' . $submission->data[$component['cid']]['value'][0], 'cache_webform_nodereference');
+        
+        // Update reference count.
+        db_query("UPDATE {webform_nodereference_count} SET total = ( total - 1 ) WHERE nid = %d AND wnid = %d AND cid = %d AND total != 0", $rnid, $component['nid'], $component['cid']);
       }
     }
   }
-}
-
-/**
- * Implements hook_flush_caches().
- */
-function webform_nodereference_flush_caches() {
-  return array('cache_webform_nodereference');
 }
