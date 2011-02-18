@@ -164,3 +164,13 @@ function webform_nodereference_webform_submission_delete($node, $submission) {
     }
   }
 }
+
+/**
+ * Implements hook_views_api().
+ */
+function webform_nodereference_views_api() {
+  return array(
+    'api' => 2.0,
+    'path' => drupal_get_path('module', 'webform_nodereference') . '/views',
+  );
+}
