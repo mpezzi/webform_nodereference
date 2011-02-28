@@ -109,6 +109,8 @@ function _webform_render_nodereference($component, $value = NULL, $filter = TRUE
       '#title' => $component['name'],
       '#required' => $component['mandatory'],
       '#weight' => $component['weight'],
+      '#prefix' => '<div class="webform-component-nodereference" id="webform-component-' . $component['form_key'] .'">',
+      '#suffix' => '</div>',
       '#webform_component' => $component,
       '#options' => $nodes,
       '#default_value' => $value[0],
