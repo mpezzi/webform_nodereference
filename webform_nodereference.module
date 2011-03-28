@@ -80,7 +80,7 @@ function webform_nodereference_webform_component_info() {
         'email' => FALSE,
         'email_address' => FALSE,
         'email_name' => FALSE,
-        'required' => FALSE,
+        'required' => TRUE,
         'conditional' => FALSE,
         'group' => FALSE,
         'attachment' => FALSE,
