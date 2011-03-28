@@ -47,6 +47,7 @@ function _webform_edit_nodereference($component) {
     $types[$type->type] = $type->name;
   }
   
+  $form = array();
   $form['extra']['nodereference_node_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Node types'),
