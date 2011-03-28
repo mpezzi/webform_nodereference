@@ -30,7 +30,7 @@ function webform_nodereference_nodeapi(&$node, $op, $teaser = NULL, $page = NULL
       webform_nodereference_node_load($node);
       break;
     case 'view':
-      webform_nodereference_node_view($node);
+      //webform_nodereference_node_view($node);
       break;
   }
 }
