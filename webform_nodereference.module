@@ -68,6 +68,19 @@ function webform_nodereference_node_view(&$node) {
 }
 
 /**
+ * Implements hook_form_alter().
+ */
+function webform_nodereference_form_alter(&$form, &$form_state, $form_id) {
+  if ( strpos($form_id, 'webform_client_form') !== FALSE ) {
+    foreach ( element_children($form['submitted']) as $key ) {
+      if ( isset($_GET[$key]) ) {
+        $form['submitted'][$key]['#default_value'] = $_GET[$key];
+      }
+    }
+  }
+}
+
+/**
  * Implements hook_webform_component_info().
  */
 function webform_nodereference_webform_component_info() {
